@@ -9,7 +9,6 @@ scene_setup()
 particles_manager = particles_setup()
 # Creating the list of particles
 particles_list = particles_manager.start_arrangement()
-particles_manager.start_arrangement()
 
 # Update function
 def update():

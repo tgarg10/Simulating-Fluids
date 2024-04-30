@@ -6,7 +6,7 @@ import globals
 class particles_setup:
     def __init__(self):
         self.particles_list = np.array([])
-        self.densitites = np.array([])
+        self.densities = np.zeros(globals.total_particles)
 
     # Setting the valls in a grid formation
     def start_arrangement(self):
@@ -28,16 +28,31 @@ class particles_setup:
     # Moving the particles
     def move_particles(self):
         # Iterating through the list of particles
-        for i in range(len(self.particles_list)):
-            self.add_gravity(self.particles_list[i])
+
+        # Apply gravity and calculate densities
+        for i in range(globals.total_particles):
+            self.particles_list[i].p += vector(0, -1 * globals.gravity * globals.delta_time, 0)
+            self.densities[i] = self.calculate_density(self.particles_list[i].pos)
+
+        # Calculate and apply pressure forces
+        for i in range(globals.total_particles):
+            pressure_force = self.calculate_pressure_force(self.particles_list[i].pos)
+            pressure_accelertion = pressure_force / self.densities[i]
+            self.particles_list[i].p += pressure_accelertion * globals.delta_time
+
+        # Update positions and resolve collisions
+        for i in range(globals.total_particles): 
+            self.particles_list[i].pos += self.particles_list[i].p * globals.delta_time           
             self.resolve_collisions(self.particles_list[i], globals.collision_damping)
 
 
-    # Adding gravity to the particle's movement
-    def add_gravity(self, particle):
-        particle.p.y += -1 * globals.gravity * globals.delta_time
-        particle.pos.y += particle.p.y * globals.delta_time
+    # Pre-calculting the values of densities
+    def update_densities(self):
+        for i in range(globals.total_particles):
+            self.densities[i] = self.calculate_density(self.particles_list[i].pos)
 
+        return self.densities
+        
 
     # Reflects the particle off if the particle collides the box
     def resolve_collisions(self, particle, collision_damping):
@@ -51,19 +66,21 @@ class particles_setup:
             particle.pos.z = globals.wall_width * np.sign(particle.pos.z)
             particle.p.z *= -1 * collision_damping
 
+
     # Find the influence of a particle at a distance from it.
     # Influence reduces with distance from the center of the particle
     def smoothing_kernel(self, distance):
-        volume = np.pi * globals.influence_radius ** 8 / 4
-        value = np.max(0, globals.influence_radius ** 2 - distance ** 2)
-        return value ** 3 / volume
+        if (distance > globals.influence_radius):
+            return 0.0
+        volume = np.pi * globals.influence_radius ** 4 / 6
+        return (globals.influence_radius - distance) ** 2 / volume
+
 
     def smoothing_kernel_derivtive(self, distance):
         if (distance > globals.influence_radius):
             return 0.0
-        f = globals.influence_radius ** 2 - distance ** 2
-        scale =- -24 / (np.pi * globals.influence_radius ** 8)
-        return scale * distance * f ** 2
+        scale = 12 / (np.pi * globals.influence_radius ** 4)
+        return (distance - globals.influence_radius) * scale
 
     # Calculate the density of at a specific point
     # to move them from areas of high density to low density
@@ -77,32 +94,35 @@ class particles_setup:
             density += globals.particle_mass * influence
 
         return density
-
-    # Pre-calculting the values of densities
-    def update_densities(self):
-        for i in range(globals.total_particles):
-            self.densitites[i] = self.calculate_density(self.particles_list[i])
-
-        return self.densitites
+    
 
     # Using gradient descent to get the particles to a zone of low density
     def calculate_pressure_force(self, sample_point):
         pressure_force = vector(0, 0, 0)
-        self.update_densities()
-
         # Loop over all particle positions to get the density at a point
         for i in range(globals.total_particles):
             particle = self.particles_list[i]
             distance = mag(particle.pos - sample_point)
-            direction = (particle.pos - sample_point) / distance
-            slope = self.smoothing_kernel_derivative(distance)
+            if distance != 0:
+                direction = (particle.pos - sample_point) / distance
+            else:
+                direction = vector(random(), random(), random())
+            slope = self.smoothing_kernel_derivtive(distance)
             density = self.densities[i]
-            pressure_force += -self.convert_density_to_pressure(density) direction * slope * globals.particle_mass / density
+            # Every action has an equal and opposite reaction
+            shared_pressure = self.calculate_shared_pressure(density, self.densities[i])
+            pressure_force += direction * shared_pressure * slope * globals.particle_mass / density
 
         return pressure_force
     
     # Pressure from a particle to another
-    def convert_density_to_pressure(density):
+    def convert_density_to_pressure(self, density):
         density_error = density - globals.target_density
         pressure = density_error * globals.pressure_multiplier
         return pressure
+    
+    # The average of the pressures of the two particles
+    def calculate_shared_pressure(self, densityA, densityB):
+        pressureA = self.convert_density_to_pressure(densityA)
+        pressureB = self.convert_density_to_pressure(densityB)
+        return (pressureA + pressureB) / 2
