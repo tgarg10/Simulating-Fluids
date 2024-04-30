@@ -7,6 +7,7 @@ class particles_setup:
     def __init__(self):
         self.particles_list = np.array([])
         self.densities = np.zeros(globals.total_particles)
+        self.predicted_positions = np.array([])
         self.spatial_lookup = dict()
 
     # Setting the valls in a grid formation
@@ -23,8 +24,9 @@ class particles_setup:
             particle.pos.x = (i % particles_per_row - particles_per_row / 2 + 0.5) * globals.spacing
             particle.pos.y = (i / particles_per_row - particles_per_col / 2 + 0.5) * globals.spacing
             self.particles_list = np.append(self.particles_list, particle)
-        
-        self.create_spatial_lookup()
+            self.predicted_positions = np.append(self.predicted_positions, particle.pos)
+
+        self.update_spatial_lookup()
 
         return self.particles_list
 
@@ -32,11 +34,18 @@ class particles_setup:
     def move_particles(self):
         # Iterating through the list of particles
 
-        # Apply gravity and calculate densities
+        # Apply gravity
         for i in range(globals.total_particles):
             self.particles_list[i].p += vector(0, -1 * globals.gravity * globals.delta_time, 0)
-            self.densities[i] = self.calculate_density(self.particles_list[i].pos)
+            # Predicting the particle's next position to better calculate its force
+            self.predicted_positions[i] = self.particles_list[i].pos + self.particles_list[i].p * globals.delta_time
 
+        self.update_spatial_lookup()
+
+        # Calculate densities
+        for i in range(globals.total_particles):
+            self.densities[i] = self.calculate_density(self.predicted_positions[i])
+        
         # Calculate and apply pressure forces
         for i in range(globals.total_particles):
             pressure_force = self.calculate_pressure_force(self.particles_list[i].pos)
@@ -47,7 +56,7 @@ class particles_setup:
         for i in range(globals.total_particles): 
             self.particles_list[i].pos += self.particles_list[i].p * globals.delta_time           
             self.resolve_collisions(self.particles_list[i], globals.collision_damping)
-        
+
 
     # Reflects the particle off if the particle collides the box
     def resolve_collisions(self, particle, collision_damping):
@@ -84,8 +93,8 @@ class particles_setup:
         density = 0
 
         # Loop over all particle positions to get the density at a point
-        for particle in self.particles_list:
-            distance = mag(particle.pos - sample_point)
+        for particle in self.get_lookup_particles(sample_point):
+            distance = mag(particle - sample_point)
             influence = self.smoothing_kernel(distance)
             density += globals.particle_mass * influence
 
@@ -111,23 +120,66 @@ class particles_setup:
 
         return pressure_force
     
-    # Assigning each particle to a cell on the spatial lookup
-    def create_spatial_lookup(self):
-        for particle in self.particles_list:
-            particle_cell = self.position_to_cell_coord(particle)
+    # Assigning each particle to a cell in the spatial lookup
+    def update_spatial_lookup(self):
+        self.spatial_lookup = dict()
+        for particle_pos in self.predicted_positions:
+            particle_cell = self.position_to_cell_coord(particle_pos)
             if particle_cell in self.spatial_lookup:
-                self.spatial_lookup[particle_cell].append(particle)
+                self.spatial_lookup[particle_cell] = np.append(self.spatial_lookup[particle_cell], particle_pos)
             else:
-                self.spatial_lookup[particle_cell] = [particle]
+                self.spatial_lookup[particle_cell] = np.array([particle_pos])
 
         return self.spatial_lookup
+
+    # Returns the 3x3 grid surrounding the particle
+    def get_lookup_particles(self, particle_pos):
+        cell_coord = self.position_to_cell_coord(particle_pos)
+        influenced_particles = self.spatial_lookup[cell_coord]
+        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (0, 0, 1)))])
+        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (0, 1, 0)))])
+        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (0, 1, 1)))])
+        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (1, 0, 0)))])
+        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (1, 0, 1)))])
+        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (1, 1, 0)))])
+        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (1, 1, 1)))])
+
+        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (0, 0, -1)))])
+        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (0, -1, 0)))])
+        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (0, -1, -1)))])
+        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (-1, 0, 0)))])
+        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (-1, 0, -1)))])
+        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (-1, -1, 0)))])
+        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (-1, -1, -1)))])
+
+        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (0, 1, -1)))])
+        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (0, -1, 1)))])
+        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (1, 0, -1)))])
+        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (-1, 0, 1)))])
+        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (1, -1, 0)))])
+        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (-1, 1, 0)))])
+        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (1, 1, -1)))])
+        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (1, -1, 1)))])
+        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (-1, 1, 1)))])
+        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (1, -1, -1)))])
+        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (-1, 1, -1)))])
+        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (-1, -1, 1)))])
+
+        return influenced_particles
+
+    # Check if the coordinate exists in the spatial lookup and return those particles
+    def check_and_add(self, check_coord):
+        if check_coord in self.spatial_lookup:
+            return self.spatial_lookup[check_coord]
+        else:
+            return np.array([])
 
     # Pressure from a particle to another
     def convert_density_to_pressure(self, density):
         density_error = density - globals.target_density
         pressure = density_error * globals.pressure_multiplier
         return pressure
-    
+
     # The average of the pressures of the two particles
     def calculate_shared_pressure(self, densityA, densityB):
         pressureA = self.convert_density_to_pressure(densityA)
@@ -136,5 +188,11 @@ class particles_setup:
     
     # Returns the coordinate of the cell on the grid
     def position_to_cell_coord(self, particle_pos):
-        cell_coord = (particle_pos - particle_pos % globals.influence_radius) / globals.influence_radius
-        return cell_coord
+        offset_vector = vector(particle_pos.x % globals.influence_radius, 
+                               particle_pos.y % globals.influence_radius, 
+                               particle_pos.z % globals.influence_radius)
+        cell_coord = (particle_pos - offset_vector) / globals.influence_radius
+        return (cell_coord.x, cell_coord.y, cell_coord.z)
+    
+    def vector_add(self, p1, p2):
+        return (p1[0] + p2[0], p1[1] + p2[1], p1[2] + p2[2])
