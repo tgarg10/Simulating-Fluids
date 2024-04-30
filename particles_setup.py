@@ -44,14 +44,6 @@ class particles_setup:
         for i in range(globals.total_particles): 
             self.particles_list[i].pos += self.particles_list[i].p * globals.delta_time           
             self.resolve_collisions(self.particles_list[i], globals.collision_damping)
-
-
-    # Pre-calculting the values of densities
-    def update_densities(self):
-        for i in range(globals.total_particles):
-            self.densities[i] = self.calculate_density(self.particles_list[i].pos)
-
-        return self.densities
         
 
     # Reflects the particle off if the particle collides the box
