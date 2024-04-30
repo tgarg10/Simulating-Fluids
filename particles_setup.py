@@ -25,7 +25,7 @@ class particles_setup:
             particle.pos.y = (i / particles_per_row - particles_per_col / 2 + 0.5) * globals.spacing
             self.particles_list = np.append(self.particles_list, particle)
             self.predicted_positions = np.append(self.predicted_positions, particle.pos)
-
+        
         self.update_spatial_lookup()
 
         return self.particles_list
@@ -44,7 +44,7 @@ class particles_setup:
 
         # Calculate densities
         for i in range(globals.total_particles):
-            self.densities[i] = self.calculate_density(self.predicted_positions[i])
+            self.densities[i] = self.calculate_density([i])
         
         # Calculate and apply pressure forces
         for i in range(globals.total_particles):
@@ -87,19 +87,32 @@ class particles_setup:
         return (distance - globals.influence_radius) * scale
 
 
+    def viscosity_smoothing_kernel(self, distance):
+        return
+
     # Calculate the density of at a specific point
     # to move them from areas of high density to low density
-    def calculate_density(self, sample_point):
+    def calculate_density(self, sample_index):
         density = 0
 
         # Loop over all particle positions to get the density at a point
-        for particle in self.get_lookup_particles(sample_point):
-            distance = mag(particle - sample_point)
+        for other_index in self.get_lookup_particles(sample_index):
+            distance = mag(self.particles_list[other_index] - self.particles_list[sample_index])
             influence = self.smoothing_kernel(distance)
             density += globals.particle_mass * influence
 
         return density
     
+    def calculate_viscosity_force(self, sample_index):
+        viscosity_force = vector(0, 0, 0)
+
+        # Loop over all particle positions to get the density at a point
+        for other_index in self.get_lookup_particles(sample_index):
+            distance = mag(self.particles_list[other_index].pos - self.particles_list[sample_index].pos)
+            influence = self.viscosity_smoothing_kernel(distance)
+            viscosity_force += (self.particles_list[other_index].p - self.particles_list[sample_index].p) * influence
+
+        return viscosity_force * globals.viscosity_strength
 
     # Using gradient descent to get the particles to a zone of low density
     def calculate_pressure_force(self, sample_point):
@@ -123,18 +136,18 @@ class particles_setup:
     # Assigning each particle to a cell in the spatial lookup
     def update_spatial_lookup(self):
         self.spatial_lookup = dict()
-        for particle_pos in self.predicted_positions:
-            particle_cell = self.position_to_cell_coord(particle_pos)
+        for i in range(globals.total_particles):
+            particle_cell = self.position_to_cell_coord(self.particles_list[i].pos)
             if particle_cell in self.spatial_lookup:
-                self.spatial_lookup[particle_cell] = np.append(self.spatial_lookup[particle_cell], particle_pos)
+                self.spatial_lookup[particle_cell] = np.append(self.spatial_lookup[particle_cell], i)
             else:
-                self.spatial_lookup[particle_cell] = np.array([particle_pos])
+                self.spatial_lookup[particle_cell] = np.array([i])
 
         return self.spatial_lookup
 
     # Returns the 3x3 grid surrounding the particle
-    def get_lookup_particles(self, particle_pos):
-        cell_coord = self.position_to_cell_coord(particle_pos)
+    def get_lookup_particles(self, particle_index) -> np.ndarray:
+        cell_coord = self.position_to_cell_coord(self.particles_list[particle_index].pos)
         influenced_particles = self.spatial_lookup[cell_coord]
         influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (0, 0, 1)))])
         influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (0, 1, 0)))])
@@ -168,31 +181,32 @@ class particles_setup:
         return influenced_particles
 
     # Check if the coordinate exists in the spatial lookup and return those particles
-    def check_and_add(self, check_coord):
+    def check_and_add(self, check_coord) -> np.ndarray:
         if check_coord in self.spatial_lookup:
             return self.spatial_lookup[check_coord]
         else:
             return np.array([])
 
     # Pressure from a particle to another
-    def convert_density_to_pressure(self, density):
+    def convert_density_to_pressure(self, density) -> float:
         density_error = density - globals.target_density
         pressure = density_error * globals.pressure_multiplier
         return pressure
 
     # The average of the pressures of the two particles
-    def calculate_shared_pressure(self, densityA, densityB):
+    def calculate_shared_pressure(self, densityA, densityB) -> float:
         pressureA = self.convert_density_to_pressure(densityA)
         pressureB = self.convert_density_to_pressure(densityB)
         return (pressureA + pressureB) / 2
     
+
     # Returns the coordinate of the cell on the grid
-    def position_to_cell_coord(self, particle_pos):
+    def position_to_cell_coord(self, particle_pos) -> tuple:
         offset_vector = vector(particle_pos.x % globals.influence_radius, 
                                particle_pos.y % globals.influence_radius, 
                                particle_pos.z % globals.influence_radius)
         cell_coord = (particle_pos - offset_vector) / globals.influence_radius
         return (cell_coord.x, cell_coord.y, cell_coord.z)
     
-    def vector_add(self, p1, p2):
+    def vector_add(self, p1, p2) -> tuple:
         return (p1[0] + p2[0], p1[1] + p2[1], p1[2] + p2[2])
