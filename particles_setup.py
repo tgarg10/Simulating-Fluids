@@ -7,6 +7,7 @@ class particles_setup:
     def __init__(self):
         self.particles_list = np.array([])
         self.densities = np.zeros(globals.total_particles)
+        self.spatial_lookup = dict()
 
     # Setting the valls in a grid formation
     def start_arrangement(self):
@@ -23,6 +24,8 @@ class particles_setup:
             particle.pos.y = (i / particles_per_row - particles_per_col / 2 + 0.5) * globals.spacing
             self.particles_list = np.append(self.particles_list, particle)
         
+        self.create_spatial_lookup()
+
         return self.particles_list
 
     # Moving the particles
@@ -74,6 +77,7 @@ class particles_setup:
         scale = 12 / (np.pi * globals.influence_radius ** 4)
         return (distance - globals.influence_radius) * scale
 
+
     # Calculate the density of at a specific point
     # to move them from areas of high density to low density
     def calculate_density(self, sample_point):
@@ -107,6 +111,17 @@ class particles_setup:
 
         return pressure_force
     
+    # Assigning each particle to a cell on the spatial lookup
+    def create_spatial_lookup(self):
+        for particle in self.particles_list:
+            particle_cell = self.position_to_cell_coord(particle)
+            if particle_cell in self.spatial_lookup:
+                self.spatial_lookup[particle_cell].append(particle)
+            else:
+                self.spatial_lookup[particle_cell] = [particle]
+
+        return self.spatial_lookup
+
     # Pressure from a particle to another
     def convert_density_to_pressure(self, density):
         density_error = density - globals.target_density
@@ -118,3 +133,8 @@ class particles_setup:
         pressureA = self.convert_density_to_pressure(densityA)
         pressureB = self.convert_density_to_pressure(densityB)
         return (pressureA + pressureB) / 2
+    
+    # Returns the coordinate of the cell on the grid
+    def position_to_cell_coord(self, particle_pos):
+        cell_coord = (particle_pos - particle_pos % globals.influence_radius) / globals.influence_radius
+        return cell_coord

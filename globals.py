@@ -15,13 +15,13 @@ particle_mass = 1.0
 collision_damping = 0.9
 particle_radius = 0.5
 influence_radius = particle_radius * 4 # Radius of particle's Influence
-total_particles = 50
+total_particles = 100
 
 # Spacing between two particles for the starting grid
 spacing = 0.4
 
 target_density = 2.75
-pressure_multiplier = 20
+pressure_multiplier = 10
 
 
 # Keeping the particles away from the wall
