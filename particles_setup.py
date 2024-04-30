@@ -44,19 +44,19 @@ class particles_setup:
 
         # Calculate densities
         for i in range(globals.total_particles):
-            self.densities[i] = self.calculate_density([i])
-        
+            self.densities[i] = self.calculate_density(i)
+
         # Calculate and apply pressure forces
         for i in range(globals.total_particles):
             pressure_force = self.calculate_pressure_force(self.particles_list[i].pos)
             pressure_accelertion = pressure_force / self.densities[i]
             self.particles_list[i].p += pressure_accelertion * globals.delta_time
 
+
         # Update positions and resolve collisions
         for i in range(globals.total_particles): 
             self.particles_list[i].pos += self.particles_list[i].p * globals.delta_time           
             self.resolve_collisions(self.particles_list[i], globals.collision_damping)
-
 
     # Reflects the particle off if the particle collides the box
     def resolve_collisions(self, particle, collision_damping):
@@ -97,7 +97,7 @@ class particles_setup:
 
         # Loop over all particle positions to get the density at a point
         for other_index in self.get_lookup_particles(sample_index):
-            distance = mag(self.particles_list[other_index] - self.particles_list[sample_index])
+            distance = mag(self.particles_list[other_index].pos - self.particles_list[sample_index].pos)
             influence = self.smoothing_kernel(distance)
             density += globals.particle_mass * influence
 
@@ -139,53 +139,32 @@ class particles_setup:
         for i in range(globals.total_particles):
             particle_cell = self.position_to_cell_coord(self.particles_list[i].pos)
             if particle_cell in self.spatial_lookup:
-                self.spatial_lookup[particle_cell] = np.append(self.spatial_lookup[particle_cell], i)
+                self.spatial_lookup[particle_cell].append(i)
             else:
-                self.spatial_lookup[particle_cell] = np.array([i])
-
+                self.spatial_lookup[particle_cell] = [i]
+                
         return self.spatial_lookup
 
     # Returns the 3x3 grid surrounding the particle
     def get_lookup_particles(self, particle_index) -> np.ndarray:
         cell_coord = self.position_to_cell_coord(self.particles_list[particle_index].pos)
         influenced_particles = self.spatial_lookup[cell_coord]
-        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (0, 0, 1)))])
-        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (0, 1, 0)))])
-        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (0, 1, 1)))])
-        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (1, 0, 0)))])
-        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (1, 0, 1)))])
-        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (1, 1, 0)))])
-        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (1, 1, 1)))])
 
-        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (0, 0, -1)))])
-        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (0, -1, 0)))])
-        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (0, -1, -1)))])
-        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (-1, 0, 0)))])
-        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (-1, 0, -1)))])
-        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (-1, -1, 0)))])
-        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (-1, -1, -1)))])
+        offset_list = [(0, 0, 0), (0, 0, 1), (0, 1, 0), (0, 1, 1), (1, 0, 0), (1, 0, 1), (1, 1, 0), (1, 1, 1), (0, 0, -1), 
+                       (0, -1, 0), (0, -1, -1), (-1, 0, 0), (-1, 0, -1), (-1, -1, 0), (-1, -1, -1), (0, 1, -1), (0, -1, 1), (1, 0, -1), 
+                       (-1, 0, 1), (1, -1, 0), (-1, 1, 0), (1, 1, -1), (1, -1, 1), (-1, 1, 1), (1, -1, -1), (-1, 1, -1), (-1, -1, 1)]
 
-        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (0, 1, -1)))])
-        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (0, -1, 1)))])
-        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (1, 0, -1)))])
-        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (-1, 0, 1)))])
-        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (1, -1, 0)))])
-        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (-1, 1, 0)))])
-        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (1, 1, -1)))])
-        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (1, -1, 1)))])
-        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (-1, 1, 1)))])
-        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (1, -1, -1)))])
-        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (-1, 1, -1)))])
-        influenced_particles = np.concatenate([influenced_particles, self.check_and_add(self.vector_add(cell_coord, (-1, -1, 1)))])
-
-        return influenced_particles
+        for offset in offset_list:
+            influenced_particles = influenced_particles + self.check_and_add(self.vector_add(cell_coord, offset))
+        
+        return np.array(influenced_particles)
 
     # Check if the coordinate exists in the spatial lookup and return those particles
-    def check_and_add(self, check_coord) -> np.ndarray:
+    def check_and_add(self, check_coord) -> list:
         if check_coord in self.spatial_lookup:
             return self.spatial_lookup[check_coord]
         else:
-            return np.array([])
+            return []
 
     # Pressure from a particle to another
     def convert_density_to_pressure(self, density) -> float:
