@@ -14,15 +14,15 @@ class particles_setup:
     def start_arrangement(self):
 
         # Place particles in a grid formation
-        particles_per_row = int(np.sqrt(globals.total_particles))
-        particles_per_col = int((globals.total_particles - 1) / particles_per_row) + 1
+        cube_width = floor(np.cbrt(globals.total_particles)) + 1
 
         for i in range(globals.total_particles):
             particle = sphere(color = color.cyan, radius = globals.particle_radius, make_trail=False, retain=200)
             particle.mass = globals.particle_mass
             particle.p = vector(0, 0, 0)
-            particle.pos.x = (i % particles_per_row - particles_per_row / 2 + 0.5) * globals.spacing
-            particle.pos.y = (i / particles_per_row - particles_per_col / 2 + 0.5) * globals.spacing
+            particle.pos.x = (i % cube_width) * globals.spacing
+            particle.pos.y = (i / cube_width) * globals.spacing
+            particle.pos.z = (i / cube_width ** 2) * globals.spacing
             self.particles_list = np.append(self.particles_list, particle)
             self.predicted_positions = np.append(self.predicted_positions, particle.pos)
         
@@ -49,6 +49,7 @@ class particles_setup:
         # Calculate and apply pressure forces
         for i in range(globals.total_particles):
             pressure_force = self.calculate_pressure_force(self.particles_list[i].pos)
+            pressure_force += self.calculate_viscosity_force(i)
             pressure_accelertion = pressure_force / self.densities[i]
             self.particles_list[i].p += pressure_accelertion * globals.delta_time
 
@@ -88,7 +89,11 @@ class particles_setup:
 
 
     def viscosity_smoothing_kernel(self, distance):
-        return
+        if (distance < globals.influence_radius):
+            volume = (64 * np.pi * globals.influence_radius ** 9) / 315
+            v = globals.influence_radius ** 2 - distance ** 2
+            return v ** 3 / volume
+        return 0
 
     # Calculate the density of at a specific point
     # to move them from areas of high density to low density
@@ -169,12 +174,12 @@ class particles_setup:
     # Pressure from a particle to another
     def convert_density_to_pressure(self, density) -> float:
         density_error = density - globals.target_density
-        pressure = density_error * globals.pressure_multiplier
+        pressure = max(0, density_error) * globals.pressure_multiplier
         return pressure
 
     # The average of the pressures of the two particles
     def calculate_shared_pressure(self, densityA, densityB) -> float:
-        pressureA = self.convert_density_to_pressure(densityA)
+        pressureA = self.convert_density_to_pressure(densityA, )
         pressureB = self.convert_density_to_pressure(densityB)
         return (pressureA + pressureB) / 2
     
