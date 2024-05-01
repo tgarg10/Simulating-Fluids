@@ -1,28 +1,28 @@
 # Global Variables ---
 
 # Setting up the wall around the Fluid
-initial_wall_length = 3.0
-initial_wall_height = 2.0
-initial_wall_width = 0.2
+initial_wall_length = 2.0
+initial_wall_height = 6.0
+initial_wall_width = 1.0
 wall_thickness = 0.1
 
 # particle parameters
-gravity = 10
+gravity = 5
 update_rate = 200
 delta_time = 0.1
 particle_mass = 1.0
 
-collision_damping = 0.8
-particle_radius = 0.2
-influence_radius = 4 * particle_radius # Radius of particle's Influence
-total_particles = 50
+collision_damping = 0
+particle_radius = 0.3
+influence_radius = 1.2 * particle_radius # Radius of particle's Influence
+total_particles = 200
 
 # Spacing between two particles for the starting grid
-spacing = 0.4
+spacing = 0.2
 
-target_density = 5
-viscosity_strength = 0
-pressure_multiplier = 20
+target_density = 2
+viscosity_strength = 0.5
+pressure_multiplier = 12
 
 
 # Keeping the particles away from the wall

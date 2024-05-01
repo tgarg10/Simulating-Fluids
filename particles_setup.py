@@ -48,11 +48,10 @@ class particles_setup:
 
         # Calculate and apply pressure forces
         for i in range(globals.total_particles):
-            pressure_force = self.calculate_pressure_force(self.particles_list[i].pos)
+            pressure_force = self.calculate_pressure_force(i)
             pressure_force += self.calculate_viscosity_force(i)
             pressure_accelertion = pressure_force / self.densities[i]
             self.particles_list[i].p += pressure_accelertion * globals.delta_time
-
 
         # Update positions and resolve collisions
         for i in range(globals.total_particles): 
@@ -75,18 +74,23 @@ class particles_setup:
     # Find the influence of a particle at a distance from it.
     # Influence reduces with distance from the center of the particle
     def smoothing_kernel(self, distance):
-        if (distance > globals.influence_radius):
+        if (distance >= globals.influence_radius):
             return 0.0
         volume = np.pi * globals.influence_radius ** 4 / 6
         return (globals.influence_radius - distance) ** 2 / volume
 
-
-    def smoothing_kernel_derivtive(self, distance):
-        if (distance > globals.influence_radius):
+    def smoothing_kernel_derivtive1(self, distance):
+        if (distance >= globals.influence_radius):
             return 0.0
         scale = 12 / (np.pi * globals.influence_radius ** 4)
         return (distance - globals.influence_radius) * scale
-
+  
+    def smoothing_kernel_derivtive(self, distance):
+        if (distance >= globals.influence_radius):
+            return 0.0
+        f = globals.influence_radius ** 2 - distance ** 2
+        scale = -24 / (np.pi * globals.influence_radius ** 8)
+        return distance * scale * f ** 2
 
     def viscosity_smoothing_kernel(self, distance):
         if (distance < globals.influence_radius):
@@ -120,16 +124,18 @@ class particles_setup:
         return viscosity_force * globals.viscosity_strength
 
     # Using gradient descent to get the particles to a zone of low density
-    def calculate_pressure_force(self, sample_point):
+    def calculate_pressure_force(self, sample_index):
         pressure_force = vector(0, 0, 0)
         # Loop over all particle positions to get the density at a point
         for i in range(globals.total_particles):
-            particle = self.particles_list[i]
-            distance = mag(particle.pos - sample_point)
+            if i == sample_index:
+                continue
+            particle = self.predicted_positions[i]
+            distance = mag(particle - self.particles_list[sample_index].pos)
             if distance != 0:
-                direction = (particle.pos - sample_point) / distance
+                direction = (particle - self.particles_list[sample_index].pos) / distance
             else:
-                direction = vector(random(), random(), random())
+                direction = vector.random()
             slope = self.smoothing_kernel_derivtive(distance)
             density = self.densities[i]
             # Every action has an equal and opposite reaction
@@ -179,7 +185,7 @@ class particles_setup:
 
     # The average of the pressures of the two particles
     def calculate_shared_pressure(self, densityA, densityB) -> float:
-        pressureA = self.convert_density_to_pressure(densityA, )
+        pressureA = self.convert_density_to_pressure(densityA)
         pressureB = self.convert_density_to_pressure(densityB)
         return (pressureA + pressureB) / 2
     
