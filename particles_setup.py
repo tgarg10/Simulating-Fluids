@@ -21,8 +21,8 @@ class particles_setup:
             particle.mass = globals.particle_mass
             particle.p = vector(0, 0, 0)
             particle.pos.x = (i % cube_width) * globals.spacing
-            particle.pos.y = (i / cube_width) * globals.spacing
-            particle.pos.z = (i / cube_width ** 2) * globals.spacing
+            particle.pos.y = int(i / (cube_width ** 2)) * globals.spacing
+            particle.pos.z = (int(i / cube_width) % cube_width) * globals.spacing
             self.particles_list = np.append(self.particles_list, particle)
             self.predicted_positions = np.append(self.predicted_positions, particle.pos)
         
@@ -174,7 +174,7 @@ class particles_setup:
     # Pressure from a particle to another
     def convert_density_to_pressure(self, density) -> float:
         density_error = density - globals.target_density
-        pressure = max(0, density_error) * globals.pressure_multiplier
+        pressure = density_error * globals.pressure_multiplier
         return pressure
 
     # The average of the pressures of the two particles
